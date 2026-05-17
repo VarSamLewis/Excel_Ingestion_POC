@@ -1,0 +1,106 @@
+trigger:
+  branches:
+    include:
+      - main
+
+pr:
+  branches:
+    include:
+      - main
+
+variables:
+  AZURE_SERVICE_CONNECTION: "azure-service-connection"
+  ACR_NAME: "excelIngestionAcr"
+  CONTAINER_APP_NAME: "excel-ingestion-api"
+  RESOURCE_GROUP: "excel-ingestion-rg"
+
+stages:
+  # ── Stage 1: Test ────────────────────────────────────────────
+  - stage: Test
+    displayName: "Run Tests"
+    jobs:
+      - job: Pytest
+        pool:
+          vmImage: "ubuntu-latest"
+        steps:
+          - task: UsePythonVersion@0
+            inputs:
+              versionSpec: "3.12"
+
+          - script: |
+              cd backend
+              pip install -r requirements.txt
+              pip install pytest pytest-asyncio httpx
+              cd ..
+              python -m pytest backend/tests/ -v --tb=short
+            displayName: "Install deps & run pytest"
+
+  # ── Stage 2: Build & Push (only on merge to main) ───────────
+  - stage: Build
+    displayName: "Build & Push Image"
+    dependsOn: Test
+    condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
+    jobs:
+      - job: BuildImage
+        pool:
+          vmImage: "ubuntu-latest"
+        steps:
+          - task: AzureCLI@2
+            displayName: "Build and push to ACR"
+            inputs:
+              azureSubscription: $(AZURE_SERVICE_CONNECTION)
+              scriptType: "bash"
+              scriptLocation: "inlineScript"
+              inlineScript: |
+                az acr build \
+                  --registry $(ACR_NAME) \
+                  --image excel-ingestion-api:$(Build.BuildId) \
+                  --image excel-ingestion-api:latest \
+                  .
+
+  # ── Stage 3: Deploy ─────────────────────────────────────────
+  - stage: Deploy
+    displayName: "Deploy to Container Apps"
+    dependsOn: Build
+    condition: succeeded()
+    jobs:
+      - job: DeployApp
+        pool:
+          vmImage: "ubuntu-latest"
+        steps:
+          - task: AzureCLI@2
+            displayName: "Update Container App"
+            inputs:
+              azureSubscription: $(AZURE_SERVICE_CONNECTION)
+              scriptType: "bash"
+              scriptLocation: "inlineScript"
+              inlineScript: |
+                az containerapp update \
+                  --name $(CONTAINER_APP_NAME) \
+                  --resource-group $(RESOURCE_GROUP) \
+                  --image $(ACR_NAME).azurecr.io/excel-ingestion-api:$(Build.BuildId)
+
+          - task: AzureCLI@2
+            displayName: "Health check"
+            inputs:
+              azureSubscription: $(AZURE_SERVICE_CONNECTION)
+              scriptType: "bash"
+              scriptLocation: "inlineScript"
+              inlineScript: |
+                FQDN=$(az containerapp show \
+                  --name $(CONTAINER_APP_NAME) \
+                  --resource-group $(RESOURCE_GROUP) \
+                  --query "properties.configuration.ingress.fqdn" -o tsv)
+
+                echo "Checking https://$FQDN/health ..."
+                for i in {1..10}; do
+                  STATUS=$(curl -s -o /dev/null -w "%{http_code}" "https://$FQDN/health")
+                  if [ "$STATUS" = "200" ]; then
+                    echo "Health check passed!"
+                    exit 0
+                  fi
+                  echo "Attempt $i: got $STATUS, retrying in 10s..."
+                  sleep 10
+                done
+                echo "Health check failed after 10 attempts"
+                exit 1
