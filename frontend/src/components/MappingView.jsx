@@ -9,6 +9,14 @@ const TRANSFORMS = [
   "to_string",
   "split_comma",
   "to_integer",
+  "regex_extract",
+  "concat",
+  "conditional",
+  "uppercase",
+  "lowercase",
+  "default_value",
+  "trim_whitespace",
+  "substring",
 ];
 
 export default function MappingView({ mapping, onConfirm, onReExtract }) {

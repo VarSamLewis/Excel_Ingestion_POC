@@ -1,16 +1,16 @@
 trigger:
   branches:
     include:
-      - main
+      - master
 
 pr:
   branches:
     include:
-      - main
+      - master
 
 variables:
   AZURE_SERVICE_CONNECTION: "azure-service-connection"
-  ACR_NAME: "excelIngestionAcr"
+  ACR_NAME: "excelingestionacr"
   CONTAINER_APP_NAME: "excel-ingestion-api"
   RESOURCE_GROUP: "excel-ingestion-rg"
 
@@ -39,7 +39,7 @@ stages:
   - stage: Build
     displayName: "Build & Push Image"
     dependsOn: Test
-    condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
+    condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/master'))
     jobs:
       - job: BuildImage
         pool:

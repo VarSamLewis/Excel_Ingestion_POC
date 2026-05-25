@@ -242,17 +242,17 @@ Merge to main →  Stage 1: pytest
 | `llm/validator.py` | ✅ Done |
 | `extractor/transforms.py` | ✅ Done |
 | `extractor/engine.py` | ✅ Done |
-| `cache.py` | ✅ Done — needs schema library methods added |
-| `main.py` | ✅ Done — needs `/schemas` and `/extract` routes added |
+| `cache.py` | ✅ Done |
+| `main.py` | ✅ Done |
 | `Dockerfile` | ✅ Done |
 | `azure-pipelines.yml` | ✅ Done |
-| `App.jsx` | ✅ Done — needs 4-step flow update |
+| `App.jsx` | ✅ Done |
 | `FileUpload.jsx` | ✅ Done |
-| `SchemaEditor.jsx` | ✅ Done — needs instruction guidance copy |
-| `SchemaLibrary.jsx` | ❌ Not yet written |
-| `MappingView.jsx` | ✅ Done — needs inline override added |
+| `SchemaEditor.jsx` | ✅ Done |
+| `SchemaLibrary.jsx` | ✅ Done |
+| `MappingView.jsx` | ✅ Done |
 | `ResultsView.jsx` | ✅ Done |
-| `tests/` | ❌ Not yet written |
+| `tests/` | ✅ Done |
 | `README.md` | ❌ Not yet written |
 | `DEPLOY.md` | ✅ Done |# Azure Deployment Guide
 
