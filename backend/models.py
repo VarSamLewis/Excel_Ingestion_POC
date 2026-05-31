@@ -243,6 +243,10 @@ class IngestResponse(BaseModel):
     file_storage_path: str = Field(
         default="", description="Path to the stored Excel file in ADLS/local storage"
     )
+    replay_code: str = Field(
+        default="",
+        description="Runnable Python code that replays this ingest request and writes JSON output",
+    )
     created_at: datetime | None = None
 
 
@@ -252,3 +256,37 @@ class ErrorResponse(BaseModel):
     success: bool = False
     error: str = ""
     detail: str = ""
+
+
+class ExcelSchemaColumnSummary(BaseModel):
+    """Column-level summary for a sheet."""
+
+    column_letter: str
+    header: str | None = None
+    non_empty_count: int = 0
+    first_values: list[str] = Field(default_factory=list)
+    last_values: list[str] = Field(default_factory=list)
+    dominant_type: str | None = None
+    type_inconsistencies: str | None = None
+    distinct_values: list[str] | None = None
+
+
+class ExcelSheetSchema(BaseModel):
+    """Normalized schema summary for one worksheet."""
+
+    sheet_name: str
+    total_rows: int = 0
+    total_cols: int = 0
+    header_row: int = 0
+    data_start_row: int = 0
+    columns: list[ExcelSchemaColumnSummary] = Field(default_factory=list)
+
+
+class ExcelSchemaResponse(BaseModel):
+    """Response body for POST /excel-schema."""
+
+    excel_hash: str
+    excel_schema_hash: str
+    sheet_names: list[str] = Field(default_factory=list)
+    processed_sheet_names: list[str] = Field(default_factory=list)
+    sheets: list[ExcelSheetSchema] = Field(default_factory=list)

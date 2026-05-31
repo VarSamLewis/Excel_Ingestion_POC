@@ -177,6 +177,26 @@ az staticwebapp appsettings set \
   --setting-names VITE_API_URL=https://<backend-fqdn>
 ```
 
+### CLI Demo Path (alternative frontend)
+
+If you prefer terminal-driven demos, use `cli/` as an alternative frontend.
+The CLI calls the same backend APIs hosted on Azure.
+
+```bash
+python3 -m pip install -r cli/requirements.txt
+
+# Optional: export backend URL once
+export BACKEND_URL=https://<backend-fqdn>
+
+python3 cli/excel_ingest_cli.py health
+python3 cli/excel_ingest_cli.py schemas list
+python3 cli/excel_ingest_cli.py excel-schema --excel-file ./sample.xlsx
+python3 cli/excel_ingest_cli.py ingest --schema-file ./schema.json --excel-file ./sample.xlsx
+```
+
+`ingest` writes JSON artifacts to `./artifacts` by default, including
+`ingest_output.json` for downstream scripts that insert into your own DB.
+
 ---
 
 ## Verification

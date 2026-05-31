@@ -1,0 +1,15 @@
+{
+  "name": "Demo Supplier Schema",
+  "fields": [
+    {
+      "name": "supplier_name",
+      "field_type": "string",
+      "description": "Supplier or company name"
+    },
+    {
+      "name": "amount",
+      "field_type": "number",
+      "description": "Numeric amount if present"
+    }
+  ]
+}
