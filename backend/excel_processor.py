@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import hashlib
 import io
+import json
 import logging
 from typing import Any
 
@@ -24,6 +25,12 @@ def compute_file_hash(file_bytes: bytes) -> str:
     This is the cache key prefix used throughout the system.
     """
     return hashlib.sha256(file_bytes).hexdigest()[:16]
+
+
+def compute_schema_hash(schema_payload: dict[str, Any] | list[Any]) -> str:
+    """Return a stable hash for a JSON-serialisable schema payload."""
+    canonical = json.dumps(schema_payload, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()[:16]
 
 
 def load_workbook_from_bytes(file_bytes: bytes):

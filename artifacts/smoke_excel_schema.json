@@ -1,0 +1,37 @@
+{
+  "excel_hash": "a1bdfe9ea4fec044",
+  "excel_schema_hash": "684501c78d13c310",
+  "sheet_names": [
+    "Sheet1"
+  ],
+  "processed_sheet_names": [
+    "Sheet1"
+  ],
+  "sheets": [
+    {
+      "sheet_name": "Sheet1",
+      "total_rows": 3,
+      "total_cols": 1,
+      "header_row": 1,
+      "data_start_row": 2,
+      "columns": [
+        {
+          "column_letter": "A",
+          "header": "Company",
+          "non_empty_count": 2,
+          "first_values": [
+            "  Tesco PLC  ",
+            "  Sainsbury's  "
+          ],
+          "last_values": [],
+          "dominant_type": "str",
+          "type_inconsistencies": null,
+          "distinct_values": [
+            "  Sainsbury's  ",
+            "  Tesco PLC  "
+          ]
+        }
+      ]
+    }
+  ]
+}

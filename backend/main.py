@@ -15,12 +15,18 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from backend.config import settings
 from backend.models import (
+    ExcelSchemaResponse,
     ExcelMapping,
     IngestResponse,
     SchemaDefinition,
     SheetResult,
 )
-from backend.excel_processor import compute_file_hash, get_sheet_names
+from backend.excel_processor import (
+    compute_file_hash,
+    compute_schema_hash,
+    get_sheet_names,
+    summarise_sheet,
+)
 from backend.llm.mapper import infer_mapping
 from backend.llm.validator import validate_extraction
 from backend.extractor.engine import extract
@@ -53,6 +59,60 @@ app.add_middleware(
 _jwks_client = None
 _store = None
 _file_store = None
+
+
+def _build_replay_code(
+    *,
+    backend_base_url: str,
+    schema_name: str,
+    schema_json: dict,
+    selected_sheets: str,
+) -> str:
+    """Build runnable Python code that replays the ingest request."""
+    script = f"""#!/usr/bin/env python3
+import json
+from pathlib import Path
+
+import httpx
+
+BACKEND_URL = {backend_base_url!r}
+SCHEMA_NAME = {schema_name!r}
+SCHEMA_JSON = {json.dumps(schema_json, indent=2)}
+SELECTED_SHEETS = {selected_sheets!r}
+EXCEL_PATH = Path("input.xlsx")
+OUT_PATH = Path("ingest_output.json")
+
+
+def main() -> int:
+    params = {{
+        "schema_name": SCHEMA_NAME,
+        "schema_json": json.dumps(SCHEMA_JSON),
+    }}
+    if SELECTED_SHEETS:
+        params["selected_sheets"] = SELECTED_SHEETS
+
+    files = {{
+        "file": (
+            EXCEL_PATH.name,
+            EXCEL_PATH.read_bytes(),
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+    }}
+
+    with httpx.Client(timeout=600.0) as client:
+        resp = client.post(f"{{BACKEND_URL}}/ingest", params=params, files=files)
+        resp.raise_for_status()
+        payload = resp.json()
+
+    OUT_PATH.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    print(f"Wrote {{OUT_PATH}}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
+"""
+    return script
 
 
 def _get_store():
@@ -124,11 +184,54 @@ async def health():
     return {"status": "ok"}
 
 
+@app.post("/excel-schema", response_model=ExcelSchemaResponse)
+async def excel_schema(
+    file: UploadFile = File(...),
+    selected_sheets: str = Query(
+        default="", description="Comma-separated sheet names to process (empty = all)"
+    ),
+    user: dict = Depends(get_user),
+):
+    """Return a normalized workbook schema summary for caching/replay workflows."""
+    _ = user  # Keep auth dependency behaviour consistent with other routes.
+    file_bytes = await file.read()
+    file_hash = compute_file_hash(file_bytes)
+
+    all_sheet_names = get_sheet_names(file_bytes)
+    if selected_sheets:
+        sheets_to_process = [s.strip() for s in selected_sheets.split(",") if s.strip()]
+        invalid = [s for s in sheets_to_process if s not in all_sheet_names]
+        if invalid:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Sheets not found: {invalid}. Available: {all_sheet_names}",
+            )
+    else:
+        sheets_to_process = all_sheet_names
+
+    summaries = [summarise_sheet(file_bytes, sheet_name=s) for s in sheets_to_process]
+    schema_payload = {
+        "sheet_names": all_sheet_names,
+        "processed_sheet_names": sheets_to_process,
+        "sheets": summaries,
+    }
+    schema_hash = compute_schema_hash(schema_payload)
+
+    return ExcelSchemaResponse(
+        excel_hash=file_hash,
+        excel_schema_hash=schema_hash,
+        sheet_names=all_sheet_names,
+        processed_sheet_names=sheets_to_process,
+        sheets=summaries,
+    )
+
+
 # ── Ingestion ───────────────────────────────────────────────────────
 
 
 @app.post("/ingest", response_model=IngestResponse)
 async def ingest(
+    request: Request,
     file: UploadFile = File(...),
     schema_name: str = Query(..., description="Schema name"),
     schema_json: str = Query(..., description="JSON-encoded schema definition"),
@@ -164,6 +267,12 @@ async def ingest(
 
     schema_id = schema.id or "ephemeral"
     schema_version = getattr(schema, "version", 1)
+    replay_code = _build_replay_code(
+        backend_base_url=str(request.base_url).rstrip("/"),
+        schema_name=schema_name,
+        schema_json=schema.model_dump(mode="json"),
+        selected_sheets=selected_sheets,
+    )
 
     # 1. Store the uploaded file
     try:
@@ -183,6 +292,8 @@ async def ingest(
             schema_id=schema_id,
             cache_hit=True,
         )
+        if isinstance(cached, dict) and not cached.get("replay_code"):
+            cached["replay_code"] = replay_code
         return IngestResponse.model_validate(cached)
 
     log_event(
@@ -319,6 +430,7 @@ async def ingest(
         row_count=len(all_data),
         cached=False,
         file_storage_path=storage_path,
+        replay_code=replay_code,
         created_at=datetime.now(timezone.utc),
     )
 
